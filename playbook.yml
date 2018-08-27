@@ -1,0 +1,105 @@
+- hosts: all
+  gather_facts: yes
+  become_user: root
+
+  tasks:
+    - name: add repository
+      yum_repository:
+        name: epel
+        description: EPEL YUM repo
+        baseurl: https://download.fedoraproject.org/pub/epel/$releasever/$basearch/
+        gpgcheck: false
+      become: yes
+
+    - name: upgrade all packages
+      yum: name=* state=latest
+      become: yes
+
+    - name: install packages
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - docker
+        - python-pip
+      become: yes
+
+    - name: Install docker python module
+      pip:
+        name: "{{ item }}"
+      loop:
+        - docker-compose
+        - pyOpenSSL
+      become: yes
+
+    - name: start services
+      service:
+         name: "{{ item }}"
+         state: started
+      loop:
+        - docker
+      become: yes
+
+    - name : create config dir
+      file: path=/opt/config state=directory
+      become: yes
+
+    - name : copy config files
+      copy:
+        src: "docker_auth_config.yml"
+        dest: "/opt/config/docker_auth_config.yml"
+      become: yes
+
+    - name: Generate an OpenSSL private key.
+      openssl_privatekey:
+        path: /opt/config/localhost.pem
+      become: yes
+
+    - name: Generate an OpenSSL CSR.
+      openssl_csr:
+        path: /opt/config/localhost.csr
+        privatekey_path: /opt/config/localhost.pem
+      become: yes
+
+    - name: Generate a Self Signed OpenSSL certificate
+      openssl_certificate:
+        path: /opt/config/localhost.crt
+        privatekey_path: /opt/config/localhost.pem
+        csr_path: /opt/config/localhost.csr
+        provider: selfsigned
+      become: yes
+
+    - name: Fix chmod
+      file:
+        dest: /opt/config
+        mode: 0777
+        recurse: yes
+      become: yes
+
+
+    - name: create docker_auth
+      docker_container:
+        name: docker_auth
+        image: cesanta/docker_auth:1
+        network_mode: host
+        command: /config/docker_auth_config.yml
+        volumes:
+          -  /var/log/docker_auth:/logs
+          -  /opt/config:/config:ro
+      become: yes
+
+    - name: create docker_registry
+      docker_container:
+        name: docker_registry
+        image: registry:2
+        network_mode: host
+        env:
+          REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /var/lib/registry
+          REGISTRY_AUTH: token
+          REGISTRY_AUTH_TOKEN_REALM: https://registry.example.com:5001/auth
+          REGISTRY_AUTH_TOKEN_SERVICE: "Docker registry"
+          REGISTRY_AUTH_TOKEN_ISSUER: "auth server"
+          REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE: "/ssl/localhost.crt" 
+        volumes:
+          -  /opt/config:/ssl:ro
+      become: yes
