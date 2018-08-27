@@ -3,7 +3,7 @@
   become_user: root
 
   tasks:
-    - name: add repository
+    - name: Add repository
       yum_repository:
         name: epel
         description: EPEL YUM repo
@@ -11,11 +11,11 @@
         gpgcheck: false
       become: yes
 
-    - name: upgrade all packages
+    - name: Upgrade all packages
       yum: name=* state=latest
       become: yes
 
-    - name: install packages
+    - name: Install packages
       yum:
         name: "{{ item }}"
         state: present
@@ -32,7 +32,7 @@
         - pyOpenSSL
       become: yes
 
-    - name: start services
+    - name: Start services
       service:
          name: "{{ item }}"
          state: started
@@ -40,22 +40,22 @@
         - docker
       become: yes
 
-    - name : create config dir
+    - name : Create config dir
       file: path=/opt/config state=directory
       become: yes
 
-    - name : copy config files
+    - name : Copy config files
       copy:
         src: "docker_auth_config.yml"
         dest: "/opt/config/docker_auth_config.yml"
       become: yes
 
-    - name: Generate an OpenSSL private key.
+    - name: Generate an OpenSSL private key
       openssl_privatekey:
         path: /opt/config/localhost.pem
       become: yes
 
-    - name: Generate an OpenSSL CSR.
+    - name: Generate an OpenSSL CSR
       openssl_csr:
         path: /opt/config/localhost.csr
         privatekey_path: /opt/config/localhost.pem
@@ -69,15 +69,7 @@
         provider: selfsigned
       become: yes
 
-    - name: Fix chmod
-      file:
-        dest: /opt/config
-        mode: 0777
-        recurse: yes
-      become: yes
-
-
-    - name: create docker_auth
+    - name: Create docker_auth
       docker_container:
         name: docker_auth
         image: cesanta/docker_auth:1
@@ -88,7 +80,7 @@
           -  /opt/config:/config:ro
       become: yes
 
-    - name: create docker_registry
+    - name: Create docker_registry
       docker_container:
         name: docker_registry
         image: registry:2
